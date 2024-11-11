@@ -16,7 +16,7 @@ MQTT_BROKER = "p5d4eb0f.ala.eu-central-1.emqxsl.com"
 MQTT_PORT = 8883
 MQTT_USER_BACKEND = "Kevin-parse"
 MQTT_PASSWORD_BACKEND = "20241506"
-CERTIFICATE_PATH = "C:/Users/ASUS/Desktop/OK/OK_Proyecto/tts_project/mqtt_cert.pem"
+CERTIFICATE_PATH = r"D:\Laboratorios-24-II\Investigación e Innovación Tecnológica\OK_Proyecto\tts_project\mqtt_cert.pem"
 
 # Tópicos
 TOPIC_SENSORES = "/sensores/abc"
