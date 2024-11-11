@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('tts/', include('tts_app.urls')),  # Asegúrate de agregar esta línea
+    path('api/', include('api.urls')),  # Asegúrate de agregar esta línea
 ]
 
 # Agregar esta línea para servir archivos media en desarrollo
