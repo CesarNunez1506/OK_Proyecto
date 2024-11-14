@@ -31,7 +31,7 @@ ALLOWED_HOSTS = ["192.168.15.15"]
 
 # Application definition
 
-INSTALLED_APPS = [
+INSTALLED_APPS = [  
     'gestos.apps.GestosConfig',
     'django.contrib.admin',
     'django.contrib.auth',

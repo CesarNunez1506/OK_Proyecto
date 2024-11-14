@@ -22,9 +22,14 @@ CERTIFICATE_PATH = "C:/Users/ASUS/Desktop/OK/OK_Proyecto/tts_project/mqtt_cert.p
 TOPIC_SENSORES = "/sensores/abc"
 TOPIC_PARSE = "/sensores/parse"
 TOPIC_API = "/datos/api"
+TOPIC_COMPLETADO = "/datos/completado"
 
-# Último mensaje recibido
+# Último mensaje recibido y cola de mensajes pendientes
 last_message = None
+pending_message = None
+
+# Bandera para controlar el estado de reproducción del ESP32
+is_playing = False
 
 # Configura una única instancia del cliente MQTT
 client = mqtt.Client()
@@ -36,23 +41,27 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         logging.info("Conectado al broker MQTT")
         # Suscripción a los tópicos
-        client.subscribe([(TOPIC_SENSORES, 0), (TOPIC_PARSE, 0), (TOPIC_API, 0)])
+        client.subscribe([(TOPIC_SENSORES, 0), (TOPIC_COMPLETADO, 0)])
     else:
         logging.error(f"Error de conexión: {rc}")
 
 # Callback de mensaje recibido
 def on_message(client, userdata, msg):
-    global last_message
+    global last_message, is_playing, pending_message
     last_message = msg.payload.decode()
     logging.info(f"Mensaje recibido en {msg.topic}: {last_message}")
 
     # Procesar mensajes según el tópico
     if msg.topic == TOPIC_SENSORES:
-        process_data(last_message)
-    elif msg.topic == TOPIC_PARSE:
-        handle_parse_message(last_message)
-    elif msg.topic == TOPIC_API:
-        handle_api_message(last_message)
+        if not is_playing:
+            process_data(last_message)
+        else:
+            # Guardar el mensaje como pendiente si ya se está reproduciendo un audio
+            pending_message = last_message
+            logging.info("Reproducción en curso. Mensaje guardado en cola.")
+
+    elif msg.topic == TOPIC_COMPLETADO:
+        handle_audio_complete()
 
 # Configura el cliente MQTT solo una vez
 client.on_connect = on_connect
@@ -62,17 +71,12 @@ client.loop_start()  # Ejecuta el loop en segundo plano
 
 # Funciones de procesamiento de datos y publicación
 
-def comparar_valores(lectura, valor_referencia, margen=15):
-    """
-    Verifica si la lectura está dentro del margen permitido del valor de referencia.
-    """
-    return abs(lectura - valor_referencia) <= margen
-
 def process_data(data):
+    global is_playing
     try:
         # Convertir el mensaje en JSON
         received_data = json.loads(data)  # Espera un JSON con los valores de los dedos
-        
+
         # Extraer los valores
         pulgar_valor = received_data.get('pulgar')
         indice_valor = received_data.get('indice')
@@ -108,13 +112,18 @@ def process_data(data):
         ).distinct()
 
         if matching_gestos.exists():
+            
             gesto = matching_gestos.first()  # Obtener el primer gesto que coincide
             significado = gesto.significado
             logging.info(f"Gesto encontrado: {significado}")
 
             # Conversión a audio
             tts = gTTS(significado, lang='es')
-            audio_file_name = f"{significado}.mp3"  # Nombre del archivo
+
+            # Asegurarse de que el nombre del archivo sea seguro para URLs
+            # Reemplazar espacios por guiones bajos y eliminar caracteres problemáticos
+            safe_significado = significado.replace(" ", "_").replace("/", "_")  # Reemplaza espacios y barras por guiones bajos
+            audio_file_name = f"{safe_significado}.mp3"  # Nombre del archivo sin espacios
             audio_path = os.path.join(settings.MEDIA_ROOT, audio_file_name)
             tts.save(audio_path)
 
@@ -126,9 +135,11 @@ def process_data(data):
 
             # Generar la URL del archivo TTS
             audio_url = f"http://192.168.15.15:8000/media/{audio_file_name}"  # Cambia localhost:8000 por la URL correcta
-            publish_audio_url(audio_url)   # Publicar la URL en el tópico /datos/api
+            publish_audio_url(audio_url)  # Publicar la URL en el tópico /datos/api
 
-            return FileResponse(open(audio_path, 'rb'), content_type='audio/mpeg')
+            # Establecer que se está reproduciendo un audio
+            is_playing = True
+
         else:
             logging.info("No se encontró ningún gesto que coincida con los valores recibidos.")
 
@@ -137,17 +148,24 @@ def process_data(data):
     except Exception as e:
         logging.error(f"Error al procesar los datos: {e}")
 
-def handle_parse_message(data):
-    logging.info(f"Procesando mensaje de /sensores/parse: {data}")
+def handle_audio_complete():
+    global is_playing, pending_message
+    logging.info("Reproducción completada. El ESP32 está disponible para un nuevo audio.")
+    is_playing = False  # Resetear la bandera para permitir una nueva reproducción
 
-def handle_api_message(data):
-    logging.info(f"Procesando mensaje de /datos/api: {data}")
+    # Si hay un mensaje pendiente en cola, procesarlo ahora
+    if pending_message:
+        logging.info("Procesando mensaje pendiente en cola.")
+        process_data(pending_message)
+        pending_message = None
 
 def publish_to_parse(significado):
     client.publish(TOPIC_PARSE, significado)
+    logging.info(f"Significado del gesto publicado en /sensores/parse: {significado}")
 
 def publish_audio_url(audio_url):
     client.publish(TOPIC_API, audio_url)
+    logging.info(f"URL del audio publicada en /datos/api: {audio_url}")
 
 # Vista para interactuar con el cliente MQTT
 class MqttToTtsView(View):
