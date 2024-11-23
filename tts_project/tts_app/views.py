@@ -90,7 +90,7 @@ def process_data(data):
             return
 
         # Definir el margen de tolerancia para la comparación
-        margen_tolerancia = 10  # Ajusta este valor según sea necesario
+        margen_tolerancia = 20  # Ajusta este valor según sea necesario
 
         # Buscar gesto en la base de datos con tolerancia en los valores
         matching_gestos = Gesto.objects.all()
@@ -134,7 +134,7 @@ def process_data(data):
             publish_to_parse(significado)
 
             # Generar la URL del archivo TTS
-            audio_url = f"http://192.168.15.15:8000/media/{audio_file_name}"  # Cambia localhost:8000 por la URL correcta
+            audio_url = f"http://192.168.152.49:8000/media/{audio_file_name}"  # Cambia localhost:8000 por la URL correcta
             publish_audio_url(audio_url)  # Publicar la URL en el tópico /datos/api
 
             # Establecer que se está reproduciendo un audio
